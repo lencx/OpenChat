@@ -11,20 +11,30 @@ jobs:
   check-secret:
     runs-on: ubuntu-latest
     outputs:
-      token-set: ${{ steps.check-key.outputs.defined }}
+      credentials-set: ${{ steps.check-credentials.outputs.defined }}
     steps:
-      - id: check-key
+      - id: check-credentials
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        if: "${{ env.HF_TOKEN != '' }}"
-        run: echo "defined=true" >> $GITHUB_OUTPUT
+          HF_USER: ${{ secrets.HF_USER }}
+          HF_REPO: ${{ secrets.HF_REPO }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_USER" ] || [ -z "$HF_REPO" ]; then
+            echo "One or more required secrets (HF_TOKEN, HF_USER, HF_REPO) are missing."
+            echo "defined=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "defined=true" >> $GITHUB_OUTPUT
+          fi
 
   deploy:
     runs-on: ubuntu-latest
     needs: [check-secret]
-    if: needs.check-secret.outputs.token-set == 'true'
+    if: needs.check-secret.outputs.credentials-set == 'true'
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_USER: ${{ secrets.HF_USER }}
+      HF_REPO: ${{ secrets.HF_REPO }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,6 +45,7 @@ jobs:
         run: rm -rf .git
 
       - name: Prepend YAML front matter to README.md
+        # color: red, yellow, green, blue, indigo, purple, pink, gray
         run: |
           echo "---" > temp_readme.md
           echo "title: Open WebUI" >> temp_readme.md
@@ -60,4 +71,4 @@ jobs:
           rm demo.gif
           git add .
           git commit -m "GitHub deploy: ${{ github.sha }}"
-          git push --force https://open-webui:${HF_TOKEN}@huggingface.co/spaces/open-webui/open-webui main
+          git push --force https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_REPO} main
